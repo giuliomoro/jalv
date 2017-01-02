@@ -19,9 +19,12 @@ def options(opt):
     opt.load('compiler_c')
     opt.load('compiler_cxx')
     autowaf.set_options(opt)
+    opt.add_option('--bela', action='store_true', default=False,
+                   dest='bela',
+                   help='Use Bela backend, not JACK nor PortAudio')
     opt.add_option('--portaudio', action='store_true', default=False,
                    dest='portaudio',
-                   help='Use PortAudio backend, not JACK')
+                   help='Use PortAudio backend, not JACK nor Bela')
     opt.add_option('--no-jack-session', action='store_true', default=False,
                    dest='no_jack_session',
                    help='Do not build JACK session support')
@@ -64,6 +67,9 @@ def configure(conf):
     if Options.options.portaudio:
         autowaf.check_pkg(conf, 'portaudio-2.0', uselib_store='PORTAUDIO',
                           atleast_version='2.0.0', mandatory=False)
+    elif Options.options.bela:
+        autowaf.check_pkg(conf, 'sratom-0', uselib_store='BELA',
+                          atleast_version='0', mandatory=True)
     else:
         autowaf.check_pkg(conf, 'jack', uselib_store='JACK',
                           atleast_version='0.120.0', mandatory=True)
@@ -138,7 +144,17 @@ def configure(conf):
 
     conf.write_config_header('jalv_config.h', remove=False)
 
-    autowaf.display_msg(conf, "Backend", "Jack" if conf.env.HAVE_JACK else "PortAudio")
+    if conf.env.HAVE_JACK:
+        backend = "Jack"
+    elif conf.env.HAVE_BELA:
+        backend = "Bela"
+    elif conf.env.HAVE_PORTAUDIO:
+        backend = "PortAudio"
+    else:
+        print('Error: no audio backend selected')
+        return 1
+    #autowaf.display_msg(conf, "Backend", "Jack" if conf.env.HAVE_JACK else "PortAudio")
+    autowaf.display_msg(conf, "Backend", backend)
     if conf.env.HAVE_JACK:
         autowaf.display_msg(conf, "Jack metadata support",
                             conf.is_defined('HAVE_JACK_METADATA'))
@@ -163,17 +179,37 @@ def build(bld):
     src/zix/ring.c
     '''
 
+    includes = ['.', 'src']
+    lib = ['pthread']
+    libflags = []
     if bld.env.HAVE_JACK:
         source += 'src/jack.c'
     elif bld.env.HAVE_PORTAUDIO:
         source += 'src/portaudio.c'
-
+    elif bld.env.HAVE_BELA:
+        source = 'src/bela.c\n' + source
+        BelaSource = '''
+GPIOcontrol.cpp
+I2c_Codec.cpp
+Midi.cpp
+PRU.cpp
+RTAudio.cpp
+RTAudioCommandLine.cpp\
+        '''
+        BelaSource = '\nsrc/'.join(BelaSource.split('\n'))
+        source = source+BelaSource
+        libflags = ['-L/usr/xenomai/lib', '-L/root/Bela/lib/']
+        includes.append('/usr/xenomai/include')
+        includes.append('/root/Bela/include')
+        lib = (['pthread_rt', 'm', 'rt', 'native', 'xenomai', 'asound', 'prussdrv', 'NE10', 'mathneon', 'stdc++']) + lib
+        print lib
     # Non-GUI version
     obj = bld(features     = 'c cprogram',
               source       = source + ' src/jalv_console.c',
               target       = 'jalv',
-              includes     = ['.', 'src'],
-              lib          = ['pthread'],
+              includes     = includes,
+              lib          = lib,
+              ldflags      = libflags,
               install_path = '${BINDIR}')
     autowaf.use_lib(bld, obj, libs)
 

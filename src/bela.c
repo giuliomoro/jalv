@@ -1,0 +1,223 @@
+/*
+   Copyright 2007-2016 David Robillard <http://drobilla.net>
+
+   Permission to use, copy, modify, and/or distribute this software for any
+   purpose with or without fee is hereby granted, provided that the above
+   copyright notice and this permission notice appear in all copies.
+
+   THIS SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+   WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+   MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+   ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+   WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+   ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+   OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#include "/root/Bela/include/Bela.h"
+#include <stdio.h>
+#include <math.h>
+#define M_PI 3.14159265358979323846
+
+#include "jalv_internal.h"
+#include "worker.h"
+
+struct JalvBackend {
+};
+
+// audio callback
+void render(BelaContext* context, void* arg){
+	return;
+	Jalv* jalv = (Jalv*)arg;
+	unsigned int inChannels = context->audioInChannels;
+	unsigned int outChannels = context->audioOutChannels;
+	unsigned int frames = context->audioFrames;
+	float inData[frames * inChannels];
+	float outData[frames * outChannels];
+
+	//deinterleave
+	float* inputs[inChannels];
+	for(unsigned int j = 0; j < inChannels; ++j){
+		inputs[j] = &inData[frames * j];
+		for(unsigned int n = 0; n < frames; ++n){
+			inData[n + j * frames] = audioRead(context, n, j);
+		}
+	}
+
+	float* outputs[outChannels];
+	
+	for(int j = 0; j < outChannels; ++j){
+		outputs[j] = &outData[frames * j];
+		for(unsigned int n = 0; n < frames; ++n){
+			outData[n + j * frames] = 0;
+		}
+	}
+
+	unsigned int nframes = context->audioFrames;
+
+	/* Prepare port buffers */
+	uint32_t in_index  = 0;
+	uint32_t out_index = 0;
+	for (uint32_t i = 0; i < jalv->num_ports; ++i) {
+		struct Port* port = &jalv->ports[i];
+		if (port->type == TYPE_AUDIO) {
+			if (port->flow == FLOW_INPUT) {
+				lilv_instance_connect_port(jalv->instance, i, ((float**)inputs)[in_index++]);
+			} else if (port->flow == FLOW_OUTPUT) {
+				lilv_instance_connect_port(jalv->instance, i, ((float**)outputs)[out_index++]);
+			}
+		} else if (port->type == TYPE_EVENT && port->flow == FLOW_INPUT) {
+			lv2_evbuf_reset(port->evbuf, true);
+
+			if (jalv->request_update) {
+				/* Plugin state has changed, request an update */
+				const LV2_Atom_Object get = {
+					{ sizeof(LV2_Atom_Object_Body), jalv->urids.atom_Object },
+					{ 0, jalv->urids.patch_Get } };
+				LV2_Evbuf_Iterator iter = lv2_evbuf_begin(port->evbuf);
+				lv2_evbuf_write(&iter, 0, 0,
+				                get.atom.type, get.atom.size,
+				                (const uint8_t*)LV2_ATOM_BODY(&get));
+			}
+		} else if (port->type == TYPE_EVENT) {
+			/* Clear event output for plugin to write to */
+			lv2_evbuf_reset(port->evbuf, false);
+		}
+	}
+	jalv->request_update = false;
+
+	/* Run plugin for this cycle */
+	const bool send_ui_updates = jalv_run(jalv, nframes);
+
+	// deinterleave
+	for(unsigned int j = 0; j < outChannels; ++j){
+		inputs[j] = &inData[frames * j];
+		for(unsigned int n = 0; n < frames; ++n){
+			audioWrite(context, n, j, outData[n + j * frames]);
+		}
+	}
+	/* Deliver UI events */
+	for (uint32_t p = 0; p < jalv->num_ports; ++p) {
+		struct Port* const port = &jalv->ports[p];
+		if (port->flow == FLOW_OUTPUT && port->type == TYPE_EVENT) {
+			for (LV2_Evbuf_Iterator i = lv2_evbuf_begin(port->evbuf);
+			     lv2_evbuf_is_valid(i);
+			     i = lv2_evbuf_next(i)) {
+				// Get event from LV2 buffer
+				uint32_t frames, subframes, type, size;
+				uint8_t* body;
+				lv2_evbuf_get(i, &frames, &subframes, &type, &size, &body);
+
+				if (jalv->has_ui && !port->old_api) {
+					// Forward event to UI
+					jalv_send_to_ui(jalv, p, type, size, body);
+				}
+			}
+		} else if (send_ui_updates &&
+		           port->flow == FLOW_OUTPUT && port->type == TYPE_CONTROL) {
+			char buf[sizeof(ControlChange) + sizeof(float)];
+			ControlChange* ev = (ControlChange*)buf;
+			ev->index    = p;
+			ev->protocol = 0;
+			ev->size     = sizeof(float);
+			*(float*)ev->body = port->control;
+			if (zix_ring_write(jalv->plugin_events, buf, sizeof(buf))
+			    < sizeof(buf)) {
+				fprintf(stderr, "Plugin => UI buffer overflow!\n");
+			}
+		}
+	}
+}
+
+bool setup(BelaContext* context, void* arg){
+	Jalv* jalv = (Jalv*)arg;
+	// Set audio parameters
+	jalv->sample_rate = context->audioSampleRate;
+	jalv->block_length  = context->audioFrames;
+	printf("jalv: %p\n", arg);
+    return true;
+}
+
+void cleanup(BelaContext* context, void* arg){
+
+}
+
+JalvBackend*
+jalv_backend_init(Jalv* jalv)
+{
+	BelaInitSettings settings;	// Standard audio settings
+	// Set default settings
+	Bela_defaultSettings(&settings);
+
+	if(Bela_initAudio(&settings, jalv) != 0) {
+		fprintf(stderr, "Error: unable to initialise audio\n");
+		return NULL;
+	}
+
+
+	// Count number of input and output audio ports/channels
+	int inChannels = 0;
+	int outChannels = 0;
+	for (uint32_t i = 0; i < jalv->num_ports; ++i) {
+		if (jalv->ports[i].type == TYPE_AUDIO) {
+			if (jalv->ports[i].flow == FLOW_INPUT) {
+				++inChannels;
+			} else if (jalv->ports[i].flow == FLOW_OUTPUT) {
+				++outChannels;
+			}
+		}
+	}
+	printf("Plugin requires %d inputs and %d outputs\n", inChannels, outChannels);
+
+	jalv->midi_buf_size = 4096;
+
+	// Allocate and return opaque backend
+	JalvBackend* backend = (JalvBackend*)calloc(1, sizeof(JalvBackend));
+	//backend->stream = stream;
+
+	return backend;
+}
+
+void
+jalv_backend_close(Jalv* jalv)
+{
+	// Clean up any resources allocated for audio
+	Bela_cleanupAudio();
+
+	free(jalv->backend);
+	jalv->backend = NULL;
+}
+
+void
+jalv_backend_activate(Jalv* jalv)
+{
+	if(Bela_startAudio()) {
+		fprintf(stderr, "Error: unable to start real-time audio\n");
+		// Stop the audio device
+		Bela_stopAudio();
+		// Clean up any resources allocated for audio
+		Bela_cleanupAudio();
+		return;
+	}
+}
+
+
+void
+jalv_backend_deactivate(Jalv* jalv)
+{
+	// Stop the audio device
+	Bela_stopAudio();
+}
+
+void
+jalv_backend_activate_port(Jalv* jalv, uint32_t port_index)
+{
+	struct Port* const port = &jalv->ports[port_index];
+	switch (port->type) {
+	case TYPE_CONTROL:
+		lilv_instance_connect_port(jalv->instance, port_index, &port->control);
+		break;
+	default:
+		break;
+	}
+}
