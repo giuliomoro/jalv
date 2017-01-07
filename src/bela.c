@@ -15,6 +15,7 @@
  */
 
 #include "/root/Bela/include/Bela.h"
+#include "bela-midi.h"
 #include <stdio.h>
 #include <math.h>
 #define M_PI 3.14159265358979323846
@@ -25,9 +26,12 @@
 struct JalvBackend {
 };
 
+BelaMidi midi;
+bool midiEnabled = true;
+const char* gMidiPort0 = "hw:1,0,0";
+
 // audio callback
 void render(BelaContext* context, void* arg){
-	return;
 	Jalv* jalv = (Jalv*)arg;
 	unsigned int inChannels = context->audioInChannels;
 	unsigned int outChannels = context->audioOutChannels;
@@ -68,6 +72,13 @@ void render(BelaContext* context, void* arg){
 			}
 		} else if (port->type == TYPE_EVENT && port->flow == FLOW_INPUT) {
 			lv2_evbuf_reset(port->evbuf, true);
+	
+	int availableMidiMessages = 0;
+	if(midiEnabled)
+	if(midi != NULL){
+		if((availableMidiMessages = bela_midi_available_messages(midi)) > 0)
+			jalv->request_update = true;
+	}
 
 			if (jalv->request_update) {
 				/* Plugin state has changed, request an update */
@@ -75,6 +86,17 @@ void render(BelaContext* context, void* arg){
 					{ sizeof(LV2_Atom_Object_Body), jalv->urids.atom_Object },
 					{ 0, jalv->urids.patch_Get } };
 				LV2_Evbuf_Iterator iter = lv2_evbuf_begin(port->evbuf);
+				if(midiEnabled)
+				while((availableMidiMessages = bela_midi_available_messages(midi)) > 0){
+					unsigned char buf[3];
+					unsigned char size = bela_midi_get_message(midi, buf);
+					rt_printf("%#hx %#hx %#hx\n", buf[0], buf[1], buf[2]);
+					lv2_evbuf_write(&iter,
+						0, 0,
+						jalv->midi_event_id,
+						size, buf
+					);
+				}
 				lv2_evbuf_write(&iter, 0, 0,
 				                get.atom.type, get.atom.size,
 				                (const uint8_t*)LV2_ATOM_BODY(&get));
@@ -130,16 +152,21 @@ void render(BelaContext* context, void* arg){
 }
 
 bool setup(BelaContext* context, void* arg){
+	static bool midiInit = false;
+	if(midiEnabled && !midiInit){
+		midi = bela_midi_new(gMidiPort0);
+		midiInit = true;
+	}
 	Jalv* jalv = (Jalv*)arg;
 	// Set audio parameters
 	jalv->sample_rate = context->audioSampleRate;
 	jalv->block_length  = context->audioFrames;
-	printf("jalv: %p\n", arg);
     return true;
 }
 
 void cleanup(BelaContext* context, void* arg){
-
+	if(midiEnabled)
+	bela_midi_free(midi);
 }
 
 JalvBackend*
