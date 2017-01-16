@@ -90,7 +90,6 @@ void render(BelaContext* context, void* arg){
 				while((availableMidiMessages = bela_midi_available_messages(midi)) > 0){
 					unsigned char buf[3];
 					unsigned char size = bela_midi_get_message(midi, buf);
-					rt_printf("%#hx %#hx %#hx\n", buf[0], buf[1], buf[2]);
 					lv2_evbuf_write(&iter,
 						0, 0,
 						jalv->midi_event_id,

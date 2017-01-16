@@ -11,8 +11,8 @@ unsigned int bela_midi_get_message(BelaMidi belaMidi, unsigned char* buf){
 	Midi* midi = (Midi*)belaMidi;
 	MidiChannelMessage message;
 	message = midi->getParser()->getNextChannelMessage();
-	message.prettyPrint();
-	buf[0] = message.getStatusByte();
+	//message.prettyPrint();
+	buf[0] = message.getStatusByte() | message.getChannel();
 	unsigned char size = message.getNumDataBytes();
 	for(int n = 0; n < size; ++n){
 		buf[n + 1] = message.getDataByte(n);	
