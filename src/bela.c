@@ -174,7 +174,12 @@ jalv_backend_init(Jalv* jalv)
 	BelaInitSettings settings;	// Standard audio settings
 	// Set default settings
 	Bela_defaultSettings(&settings);
-
+	settings.pruNumber = 0;
+	settings.useDigital = 0;
+	settings.periodSize = 128;
+	settings.headphoneLevel = 0;
+	settings.numDigitalChannels = 0;
+	settings.useDigital = 0;
 	if(Bela_initAudio(&settings, jalv) != 0) {
 		fprintf(stderr, "Error: unable to initialise audio\n");
 		return NULL;
