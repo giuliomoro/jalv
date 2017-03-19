@@ -50,7 +50,7 @@ def configure(conf):
     conf.load('compiler_c')
     conf.load('compiler_cxx')
     autowaf.configure(conf)
-    autowaf.set_c99_mode(conf)
+    # autowaf.set_c99_mode(conf)
     autowaf.display_header('Jalv Configuration')
 
     autowaf.check_pkg(conf, 'lv2', atleast_version='1.14.0', uselib_store='LV2')
@@ -194,6 +194,7 @@ I2c_Codec.cpp
 Midi.cpp
 PRU.cpp
 RTAudio.cpp
+math_runfast.c
 RTAudioCommandLine.cpp\
         '''
         BelaSource = '\nsrc/'.join(BelaSource.split('\n'))
@@ -202,7 +203,9 @@ RTAudioCommandLine.cpp\
         includes.append('/usr/xenomai/include')
         includes.append('/root/Bela/include')
         lib = (['pthread_rt', 'm', 'rt', 'native', 'xenomai', 'asound', 'prussdrv', 'NE10', 'mathneon', 'stdc++']) + lib
-        print lib
+    cflags = ['-O3', '-march=armv7-a', '-mtune=cortex-a8', '-mfloat-abi=hard', '-mfpu=neon', '-ftree-vectorize'];
+    cxxflags = cflags;
+    cflags.append('-std=gnu99')
     # Non-GUI version
     obj = bld(features     = 'c cprogram',
               source       = source + ' src/jalv_console.c',
@@ -210,6 +213,8 @@ RTAudioCommandLine.cpp\
               includes     = includes,
               lib          = lib,
               ldflags      = libflags,
+              cflags       = cflags,
+              cxxflags     = cxxflags,
               install_path = '${BINDIR}')
     autowaf.use_lib(bld, obj, libs)
 
