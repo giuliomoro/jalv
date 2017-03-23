@@ -180,6 +180,7 @@ jalv_backend_init(Jalv* jalv)
 	settings.headphoneLevel = 0;
 	settings.numDigitalChannels = 0;
 	settings.useDigital = 0;
+	settings.useAnalog = 0;
 	if(Bela_initAudio(&settings, jalv) != 0) {
 		fprintf(stderr, "Error: unable to initialise audio\n");
 		return NULL;
