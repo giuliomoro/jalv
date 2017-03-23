@@ -111,11 +111,26 @@ void render(BelaContext* context, void* arg){
 	const bool send_ui_updates = jalv_run(jalv, nframes);
 
 	// deinterleave
+	int clip = 0;
 	for(unsigned int j = 0; j < outChannels; ++j){
 		inputs[j] = &inData[frames * j];
 		for(unsigned int n = 0; n < frames; ++n){
-			audioWrite(context, n, j, outData[n + j * frames]);
+			float value = outData[n + j * frames];
+			if(value >= 1 || value < -1)
+				clip = 1;
+			audioWrite(context, n, j, value);
 		}
+	}
+	// clipping indicator
+	static int count = 0;
+	if(clip == 1)
+	{
+		if(count == 0){
+			rt_printf("clipping\n");
+		}
+		++count;
+		if(count > 10)
+			count = 0;
 	}
 	/* Deliver UI events */
 	for (uint32_t p = 0; p < jalv->num_ports; ++p) {
