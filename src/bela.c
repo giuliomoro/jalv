@@ -57,8 +57,6 @@ void render(BelaContext* context, void* arg){
 		}
 	}
 
-	unsigned int nframes = context->audioFrames;
-
 	/* Prepare port buffers */
 	uint32_t in_index  = 0;
 	uint32_t out_index = 0;
@@ -80,6 +78,19 @@ void render(BelaContext* context, void* arg){
 			jalv->request_update = true;
 	}
 
+#undef AUTO_NOTES
+#ifdef AUTO_NOTES
+	static int count = 0;
+	static bool status = 0;
+	int notes = 1;
+	int note = 60;
+	int targetCount = 44100 / frames * 0.5;
+	if(count % targetCount == 0){
+		status = !status;
+		jalv->request_update = true;
+	}
+	count++;
+#endif
 			if (jalv->request_update) {
 				/* Plugin state has changed, request an update */
 				const LV2_Atom_Object get = {
@@ -96,6 +107,18 @@ void render(BelaContext* context, void* arg){
 						size, buf
 					);
 				}
+#ifdef AUTO_NOTES
+				rt_printf("event %d %#x\n", status, note);
+				for(int n = 0; n < notes; ++n){
+					char buf[] = {
+						0x80 + status * 16, note +  1 * n , 36,
+					};
+					lv2_evbuf_write(&iter,
+									0, 0,
+									jalv->midi_event_id,
+									3, buf);
+				}
+#endif
 				lv2_evbuf_write(&iter, 0, 0,
 				                get.atom.type, get.atom.size,
 				                (const uint8_t*)LV2_ATOM_BODY(&get));
@@ -108,7 +131,7 @@ void render(BelaContext* context, void* arg){
 	jalv->request_update = false;
 
 	/* Run plugin for this cycle */
-	const bool send_ui_updates = jalv_run(jalv, nframes);
+	const bool send_ui_updates = jalv_run(jalv, frames);
 
 	// deinterleave
 	int clip = 0;
@@ -191,11 +214,14 @@ jalv_backend_init(Jalv* jalv)
 	Bela_defaultSettings(&settings);
 	settings.pruNumber = 0;
 	settings.useDigital = 0;
-	settings.periodSize = 128;
+	settings.periodSize = 64;
 	settings.headphoneLevel = 0;
 	settings.numDigitalChannels = 0;
 	settings.useDigital = 0;
 	settings.useAnalog = 0;
+	settings.render = render;
+	settings.setup = setup;
+	settings.cleanup = cleanup;
 	if(Bela_initAudio(&settings, jalv) != 0) {
 		fprintf(stderr, "Error: unable to initialise audio\n");
 		return NULL;

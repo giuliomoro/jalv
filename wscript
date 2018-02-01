@@ -181,28 +181,20 @@ def build(bld):
 
     includes = ['.', 'src']
     lib = ['pthread']
-    libflags = []
+    libflags = ['-L/root/Bela/lib']
     if bld.env.HAVE_JACK:
         source += 'src/jack.c'
     elif bld.env.HAVE_PORTAUDIO:
         source += 'src/portaudio.c'
     elif bld.env.HAVE_BELA:
         source = 'src/bela.c\nsrc/bela-midi.cpp' + source
-        BelaSource = '''
-GPIOcontrol.cpp
-I2c_Codec.cpp
-Midi.cpp
-PRU.cpp
-RTAudio.cpp
-math_runfast.c
-RTAudioCommandLine.cpp\
-        '''
+        BelaSource = ''
         BelaSource = '\nsrc/'.join(BelaSource.split('\n'))
         source = source+BelaSource
         libflags = ['-L/usr/xenomai/lib', '-L/root/Bela/lib/']
         includes.append('/usr/xenomai/include')
         includes.append('/root/Bela/include')
-        lib = (['pthread_rt', 'm', 'rt', 'native', 'xenomai', 'asound', 'prussdrv', 'NE10', 'mathneon', 'stdc++']) + lib
+        lib = (['pthread_rt', 'm', 'bela', 'belaextra', 'rt', 'native', 'xenomai', 'asound', 'prussdrv', 'NE10', 'mathneon', 'stdc++']) + lib
     cflags = ['-O3', '-march=armv7-a', '-mtune=cortex-a8', '-mfloat-abi=hard', '-mfpu=neon', '-ftree-vectorize'];
     cxxflags = cflags;
     cflags.append('-std=gnu99')
