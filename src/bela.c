@@ -23,6 +23,18 @@
 #include "jalv_internal.h"
 #include "worker.h"
 
+// playback_file stuff
+#include <SampleLoader.h>
+#include <SampleData.h>
+
+#define NUM_CHANNELS 1
+
+struct SampleData gSampleData[NUM_CHANNELS];
+
+int gReadPtr;	// Position of last read sample from file
+int gDonePlaying;
+
+// playback_file stuff end
 struct JalvBackend {
 };
 
@@ -141,6 +153,26 @@ void render(BelaContext* context, void* arg){
 			float value = outData[n + j * frames];
 			if(value >= 1 || value < -1)
 				clip = 1;
+			if(!gDonePlaying && j < NUM_CHANNELS)
+			{
+				if(gSampleData[j].samples)
+				{
+					value += gSampleData[j].samples[gReadPtr];
+				}
+				if(gSampleData[j].sampleLen == gReadPtr)
+				{
+					gReadPtr = 0;
+					if(!jalv->opts.playback_loop)
+					{
+						gDonePlaying = 1;
+					}
+				}
+				//printf("%d %d %d\n", gReadPtr, gSampleData[j].sampleLen, j);
+				if(j == NUM_CHANNELS - 1)
+				{
+					++gReadPtr;
+				}
+			}
 			audioWrite(context, n, j, value);
 		}
 	}
@@ -198,12 +230,39 @@ bool setup(BelaContext* context, void* arg){
 	// Set audio parameters
 	jalv->sample_rate = context->audioSampleRate;
 	jalv->block_length  = context->audioFrames;
+
+	char* filename = jalv->opts.playback_filename;
+
+	if(filename)
+	{
+		for(int ch=0;ch<NUM_CHANNELS;ch++) {
+			int sampleLen = getNumFrames(filename);
+			gSampleData[ch].sampleLen = sampleLen;
+			gSampleData[ch].samples = (float*)malloc(sizeof(float) * sampleLen);
+			getSamples(filename, gSampleData[ch].samples, ch, 0, sampleLen);
+			printf("loading %d samples from %s into channel %d\n", gSampleData[ch].sampleLen, filename, ch);
+		}
+		gReadPtr = 0;
+		gDonePlaying = 0;
+	} else {
+		for(int ch=0;ch<NUM_CHANNELS;ch++) {
+			gSampleData[ch].sampleLen = 0;
+			gSampleData[ch].samples = NULL;
+		}
+	}
+
     return true;
 }
 
 void cleanup(BelaContext* context, void* arg){
 	if(midiEnabled)
-	bela_midi_free(midi);
+		bela_midi_free(midi);
+
+    for(int ch=0;ch<NUM_CHANNELS;ch++)
+	{
+		if(gSampleData[ch].samples)
+			free(gSampleData[ch].samples);
+	}
 }
 
 JalvBackend*

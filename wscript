@@ -194,7 +194,7 @@ def build(bld):
         libflags = ['-L/usr/xenomai/lib', '-L/root/Bela/lib/']
         includes.append('/usr/xenomai/include')
         includes.append('/root/Bela/include')
-        lib = (['pthread_rt', 'm', 'bela', 'belaextra', 'rt', 'native', 'xenomai', 'asound', 'prussdrv', 'NE10', 'mathneon', 'stdc++']) + lib
+        lib = (['pthread_rt', 'm', 'bela', 'belaextra', 'sndfile', 'rt', 'native', 'xenomai', 'asound', 'prussdrv', 'NE10', 'mathneon', 'stdc++']) + lib
     cflags = ['-O3', '-march=armv7-a', '-mtune=cortex-a8', '-mfloat-abi=hard', '-mfpu=neon', '-ftree-vectorize'];
     cxxflags = cflags;
     cflags.append('-std=gnu99')

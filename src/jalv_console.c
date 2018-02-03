@@ -45,6 +45,8 @@ print_usage(const char* name, bool error)
 	fprintf(os, "  -t           Print trace messages from plugin\n");
 	fprintf(os, "  -b SIZE      Buffer size for plugin <=> UI communication\n");
 	fprintf(os, "  -n NAME      JACK client name\n");
+	fprintf(os, "  -k FILENAME  Audio file to play\n");
+	fprintf(os, "  -o           Loop audio file\n");
 	fprintf(os, "  -x           Exact JACK client name (exit if taken)\n");
 	return error ? 1 : 0;
 }
@@ -79,6 +81,14 @@ jalv_init(int* argc, char*** argv, JalvOptions* opts)
 			opts->show_ui = true;
 		} else if ((*argv)[a][1] == 'p') {
 			opts->print_controls = true;
+		} else if ((*argv)[a][1] == 'k') {
+			if (++a == *argc) {
+				fprintf(stderr, "Missing argument for -k\n");
+				return 1;
+			}
+			opts->playback_filename = jalv_strdup((*argv)[a]);
+		} else if ((*argv)[a][1] == 'o') {
+			opts->playback_loop = true;
 		} else if ((*argv)[a][1] == 'u') {
 			if (++a == *argc) {
 				fprintf(stderr, "Missing argument for -u\n");
