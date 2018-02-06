@@ -56,7 +56,28 @@ void render(BelaContext* context, void* arg){
 	for(unsigned int j = 0; j < inChannels; ++j){
 		inputs[j] = &inData[frames * j];
 		for(unsigned int n = 0; n < frames; ++n){
-			inData[n + j * frames] = audioRead(context, n, j);
+			float playbackValue = 0;
+			if(!gDonePlaying && j < NUM_CHANNELS)
+			{
+				if(gSampleData[j].samples)
+				{
+					playbackValue = gSampleData[j].samples[gReadPtr];
+				}
+				if(gSampleData[j].sampleLen == gReadPtr)
+				{
+					gReadPtr = 0;
+					if(!jalv->opts.playback_loop)
+					{
+						gDonePlaying = 1;
+					}
+				}
+				//printf("%d %d %d\n", gReadPtr, gSampleData[j].sampleLen, j);
+				if(j == NUM_CHANNELS - 1)
+				{
+					++gReadPtr;
+				}
+			}
+			inData[n + j * frames] = audioRead(context, n, j) + playbackValue;
 		}
 	}
 
@@ -153,26 +174,6 @@ void render(BelaContext* context, void* arg){
 			float value = outData[n + j * frames];
 			if(value >= 1 || value < -1)
 				clip = 1;
-			if(!gDonePlaying && j < NUM_CHANNELS)
-			{
-				if(gSampleData[j].samples)
-				{
-					value += gSampleData[j].samples[gReadPtr];
-				}
-				if(gSampleData[j].sampleLen == gReadPtr)
-				{
-					gReadPtr = 0;
-					if(!jalv->opts.playback_loop)
-					{
-						gDonePlaying = 1;
-					}
-				}
-				//printf("%d %d %d\n", gReadPtr, gSampleData[j].sampleLen, j);
-				if(j == NUM_CHANNELS - 1)
-				{
-					++gReadPtr;
-				}
-			}
 			audioWrite(context, n, j, value);
 		}
 	}
