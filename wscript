@@ -194,9 +194,12 @@ def build(bld):
         libflags = ['-L/usr/xenomai/lib', '-L/root/Bela/lib/']
         includes.append('/usr/xenomai/include')
         includes.append('/root/Bela/include')
-        lib = (['pthread_rt', 'm', 'bela', 'belaextra', 'sndfile', 'rt', 'native', 'xenomai', 'asound', 'prussdrv', 'NE10', 'mathneon', 'stdc++']) + lib
-    cflags = ['-O3', '-march=armv7-a', '-mtune=cortex-a8', '-mfloat-abi=hard', '-mfpu=neon', '-ftree-vectorize'];
-    cxxflags = cflags;
+        # XENOMAI 2.6: lib = (['pthread_rt', 'rt', 'native', 'xenomai']) + lib
+        #XENOMAI 3
+        lib = (['cobalt', 'modechk', 'pthread', 'rt']) + lib;
+        lib = (['m', 'bela', 'belaextra', 'sndfile', 'asound', 'prussdrv', 'NE10', 'mathneon', 'stdc++']) + lib;
+    cflags = ['-g', '-march=armv7-a', '-mtune=cortex-a8', '-mfloat-abi=hard', '-mfpu=neon', '-ftree-vectorize'];
+    cxxflags = [''];
     cflags.append('-std=gnu99')
     # Non-GUI version
     obj = bld(features     = 'c cprogram',
