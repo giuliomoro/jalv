@@ -282,6 +282,7 @@ jalv_backend_init(Jalv* jalv)
 	settings.render = render;
 	settings.setup = setup;
 	settings.cleanup = cleanup;
+	settings.highPerformanceMode = 1;
 	if(Bela_initAudio(&settings, jalv) != 0) {
 		fprintf(stderr, "Error: unable to initialise audio\n");
 		return NULL;
