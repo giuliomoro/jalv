@@ -14,8 +14,8 @@
    OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include "/root/Bela/include/Bela.h"
-#include "bela-midi.h"
+#include <Bela.h>
+#include <Midi_c.h>
 #include <stdio.h>
 #include <math.h>
 #define M_PI 3.14159265358979323846
@@ -38,9 +38,9 @@ int gDonePlaying;
 struct JalvBackend {
 };
 
-BelaMidi midi;
+Midi* midi;
 bool midiEnabled = true;
-const char* gMidiPort0 = "hw:1,0,0";
+const char* gMidiPort0 = "hw:0,0,0";
 
 // audio callback
 void render(BelaContext* context, void* arg){
@@ -107,7 +107,7 @@ void render(BelaContext* context, void* arg){
 	int availableMidiMessages = 0;
 	if(midiEnabled)
 	if(midi != NULL){
-		if((availableMidiMessages = bela_midi_available_messages(midi)) > 0)
+		if((availableMidiMessages = Midi_availableMessages(midi)) > 0)
 			jalv->request_update = true;
 	}
 
@@ -131,9 +131,9 @@ void render(BelaContext* context, void* arg){
 					{ 0, jalv->urids.patch_Get } };
 				LV2_Evbuf_Iterator iter = lv2_evbuf_begin(port->evbuf);
 				if(midiEnabled)
-				while((availableMidiMessages = bela_midi_available_messages(midi)) > 0){
+				while((availableMidiMessages = Midi_availableMessages(midi)) > 0){
 					unsigned char buf[3];
-					unsigned char size = bela_midi_get_message(midi, buf);
+					unsigned char size = Midi_getMessage(midi, buf);
 					lv2_evbuf_write(&iter,
 						0, 0,
 						jalv->midi_event_id,
@@ -224,7 +224,7 @@ void render(BelaContext* context, void* arg){
 bool setup(BelaContext* context, void* arg){
 	static bool midiInit = false;
 	if(midiEnabled && !midiInit){
-		midi = bela_midi_new(gMidiPort0);
+		midi = Midi_new(gMidiPort0);
 		midiInit = true;
 	}
 	Jalv* jalv = (Jalv*)arg;
@@ -257,7 +257,7 @@ bool setup(BelaContext* context, void* arg){
 
 void cleanup(BelaContext* context, void* arg){
 	if(midiEnabled)
-		bela_midi_free(midi);
+		Midi_delete(midi);
 
     for(int ch=0;ch<NUM_CHANNELS;ch++)
 	{
