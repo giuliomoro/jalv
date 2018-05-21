@@ -198,7 +198,7 @@ def build(bld):
         #XENOMAI 3
         lib = (['cobalt', 'modechk', 'pthread', 'rt']) + lib;
         lib = (['m', 'bela', 'belaextra', 'sndfile', 'asound', 'prussdrv', 'NE10', 'mathneon', 'stdc++']) + lib;
-    cflags = ['-g', '-march=armv7-a', '-mtune=cortex-a8', '-mfloat-abi=hard', '-mfpu=neon', '-ftree-vectorize'];
+    cflags = ['-O2', '-march=armv7-a', '-mtune=cortex-a8', '-mfloat-abi=hard', '-mfpu=neon', '-ftree-vectorize'];
     cxxflags = [''];
     cflags.append('-std=gnu99')
     # Non-GUI version
