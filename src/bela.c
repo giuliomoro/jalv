@@ -322,9 +322,28 @@ jalv_backend_close(Jalv* jalv)
 	jalv->backend = NULL;
 }
 
+//#define OFFLINE
+#ifdef OFFLINE
+extern BelaContext gContext;
+#endif /* OFFLINE */
 void
 jalv_backend_activate(Jalv* jalv)
 {
+#ifdef OFFLINE
+	{
+		struct timespec start;
+		clock_gettime(CLOCK_REALTIME, &start);
+		int nit = 5000;
+		for(int n = 0; n < nit; ++n)
+			render(&gContext, (void*)jalv);
+		struct timespec stop;
+		clock_gettime(CLOCK_REALTIME, &stop);
+		double startTime = start.tv_sec + start.tv_nsec/1000000000.0;
+		double stopTime = stop.tv_sec +  stop.tv_nsec/1000000000.0;
+		printf("It took %10.5fs to run %d render()\n", stopTime - startTime, nit);
+		return;
+	}
+#else /* OFFLINE */
 	if(Bela_startAudio()) {
 		fprintf(stderr, "Error: unable to start real-time audio\n");
 		// Stop the audio device
@@ -333,6 +352,7 @@ jalv_backend_activate(Jalv* jalv)
 		Bela_cleanupAudio();
 		return;
 	}
+#endif /* OFFLINE */
 }
 
 
