@@ -187,7 +187,7 @@ def build(bld):
     elif bld.env.HAVE_PORTAUDIO:
         source += 'src/portaudio.c'
     elif bld.env.HAVE_BELA:
-        source = 'src/bela.c\nsrc/bela-midi.cpp' + source
+        source = 'src/bela.c\n' + source
         BelaSource = ''
         BelaSource = '\nsrc/'.join(BelaSource.split('\n'))
         source = source+BelaSource
